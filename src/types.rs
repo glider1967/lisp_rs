@@ -8,7 +8,7 @@ pub enum MalTypes {
     Bool(bool),
     Num(i64),
     Sym(String),
-    Func(fn(i64, i64) -> i64),
+    RustFunc(fn(Vec<MalTypes>) -> MalRet),
     List(Rc<Vec<MalTypes>>),
 }
 

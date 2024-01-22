@@ -21,6 +21,6 @@ pub fn print(mal: &MalTypes) -> String {
                     .join(" ")
             )
         }
-        MalTypes::Func(_) => "FUNC".to_owned(),
+        MalTypes::RustFunc(_) => "<builtin func>".to_owned(),
     }
 }
