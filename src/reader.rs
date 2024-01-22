@@ -87,6 +87,6 @@ fn read_atom(reader: &mut Reader) -> Result<MalTypes> {
             } else {
                 Ok(MalTypes::Sym(token))
             }
-        },
+        }
     }
 }
