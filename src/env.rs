@@ -6,57 +6,55 @@ use fnv::FnvHashMap;
 use crate::types::{MalRet, MalTypes};
 
 #[derive(Debug, Clone)]
-pub struct Env {
+pub struct EnvInternal {
     data: RefCell<FnvHashMap<String, MalTypes>>,
-    outer: Option<Rc<Env>>,
+    outer: Option<Env>,
+}
+pub type Env = Rc<EnvInternal>;
+pub fn new_env(outer: Option<Env>) -> Env {
+    Rc::new(EnvInternal {
+        data: RefCell::new(FnvHashMap::default()),
+        outer,
+    })
 }
 
-impl Env {
-    pub fn new(outer: Option<Rc<Env>>) -> Self {
-        Self {
-            data: RefCell::new(FnvHashMap::default()),
-            outer,
+pub fn set_env(env: &Env, key: MalTypes, val: MalTypes) -> MalRet {
+    match key {
+        MalTypes::Sym(sym) => {
+            env.data.borrow_mut().insert(sym, val.clone());
+            Ok(val)
+        }
+        _ => Err(anyhow!("invalid key type")),
+    }
+}
+
+fn find_env(env: &Env, key: &String) -> Option<Env> {
+    if env.data.borrow().contains_key(key) {
+        Some(env.clone())
+    } else {
+        match env.outer.clone() {
+            Some(e) => find_env(&e, key),
+            None => None,
         }
     }
+}
 
-    pub fn set(&mut self, key: MalTypes, val: MalTypes) -> MalRet {
-        match key {
-            MalTypes::Sym(sym) => {
-                self.data.borrow_mut().insert(sym, val.clone());
-                Ok(val)
-            },
-            _ => Err(anyhow!("invalid key type"))
-        }
-    }
-
-    fn find(&self, key: &String) -> Option<Self> {
-        if self.data.borrow().contains_key(key) {
-            Some(self.clone())
-        } else {
-            match self.outer.clone() {
-                Some(env) => env.find(key),
-                None => None,
+pub fn get_env(env: &Env, key: &MalTypes) -> MalRet {
+    match key {
+        MalTypes::Sym(s) => {
+            let found_env = find_env(&env, s);
+            if found_env.is_some() {
+                Ok(found_env
+                    .unwrap()
+                    .data
+                    .borrow()
+                    .get(s)
+                    .context(format!("`{}` not found", s))?
+                    .clone())
+            } else {
+                Err(anyhow!(format!("`{}` not found", s)))
             }
         }
-    }
-
-    pub fn get(&self, key: &MalTypes) -> MalRet {
-        match key {
-            MalTypes::Sym(s) => {
-                let found_env = self.find(s);
-                if found_env.is_some() {
-                    Ok(found_env
-                        .unwrap()
-                        .data
-                        .borrow()
-                        .get(s)
-                        .context(format!("`{}` not found", s))?
-                        .clone())
-                } else {
-                    Err(anyhow!(format!("`{}` not found", s)))
-                }
-            }
-            _ => Err(anyhow!("invalid key type")),
-        }
+        _ => Err(anyhow!("invalid key type")),
     }
 }

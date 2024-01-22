@@ -1,7 +1,7 @@
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use anyhow::{anyhow, bail, Result};
+use env::{get_env, new_env, set_env};
 use rustyline::{error::ReadlineError, DefaultEditor};
 use types::{MalRet, MalTypes};
 
@@ -13,7 +13,7 @@ mod printer;
 mod reader;
 mod types;
 
-fn eval_ast(ast: &MalTypes, env: &Rc<RefCell<Env>>) -> MalRet {
+fn eval_ast(ast: &MalTypes, env: &Env) -> MalRet {
     match ast {
         MalTypes::List(list) => {
             let mut res = vec![];
@@ -22,12 +22,12 @@ fn eval_ast(ast: &MalTypes, env: &Rc<RefCell<Env>>) -> MalRet {
             }
             Ok(MalTypes::List(Rc::new(res)))
         }
-        MalTypes::Sym(_) => Ok(env.borrow_mut().get(ast)?),
+        MalTypes::Sym(_) => Ok(get_env(&env, ast)?),
         _ => Ok(ast.clone()),
     }
 }
 
-fn eval(ast: &MalTypes, env: &Rc<RefCell<Env>>) -> MalRet {
+fn eval(ast: &MalTypes, env: &Env) -> MalRet {
     match ast {
         MalTypes::List(list) => {
             if list.is_empty() {
@@ -37,8 +37,24 @@ fn eval(ast: &MalTypes, env: &Rc<RefCell<Env>>) -> MalRet {
             let arg0 = &list[0];
             match arg0 {
                 MalTypes::Sym(sym) if sym == "def!" => {
-                    env.borrow_mut().set(list[1].clone(), eval(&list[2], env)?)
-                }, 
+                    set_env(&env, list[1].clone(), eval(&list[2], env)?)
+                }
+                MalTypes::Sym(sym) if sym == "let*" => {
+                    let new_env = new_env(Some(env.clone()));
+                    let arglist = list[1].clone();
+                    let body = list[2].clone();
+
+                    match arglist {
+                        MalTypes::List(binds) => {
+                            let bind = &binds[0];
+                            let expr = &binds[1];
+                            let _ = set_env(&new_env, bind.clone(), eval(expr, env)?);
+                        }
+                        _ => bail!("invalid arglist in let*"),
+                    }
+
+                    eval(&body, &new_env)
+                }
                 _ => match eval_ast(ast, env)? {
                     MalTypes::List(list2) => {
                         let func = &list2[0];
@@ -46,7 +62,7 @@ fn eval(ast: &MalTypes, env: &Rc<RefCell<Env>>) -> MalRet {
                         apply(&func, &args)
                     }
                     _ => Err(anyhow!("expected a list")),
-                }
+                },
             }
         }
         _ => eval_ast(ast, env),
@@ -70,10 +86,22 @@ fn apply(func: &MalTypes, args: &Vec<MalTypes>) -> MalRet {
 fn main() -> Result<()> {
     let mut rl = DefaultEditor::new()?;
 
-    let global_env = Rc::new(RefCell::new(Env::new(None)));
-    global_env.borrow_mut().set(MalTypes::Sym("+".to_owned()), MalTypes::Func(|x, y| x + y))?;
-    global_env.borrow_mut().set(MalTypes::Sym("-".to_owned()), MalTypes::Func(|x, y| x - y))?;
-    global_env.borrow_mut().set(MalTypes::Sym("*".to_owned()), MalTypes::Func(|x, y| x * y))?;
+    let global_env = new_env(None);
+    set_env(
+        &global_env,
+        MalTypes::Sym("+".to_owned()),
+        MalTypes::Func(|x, y| x + y),
+    )?;
+    set_env(
+        &global_env,
+        MalTypes::Sym("-".to_owned()),
+        MalTypes::Func(|x, y| x - y),
+    )?;
+    set_env(
+        &global_env,
+        MalTypes::Sym("*".to_owned()),
+        MalTypes::Func(|x, y| x * y),
+    )?;
 
     loop {
         let readline = rl.readline("> ");
