@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{bail, Context, Ok, Result};
 use once_cell::sync::Lazy;
 use regex::Regex;
 
@@ -46,7 +46,7 @@ fn tokenize(string: &str) -> Vec<String> {
 pub fn read_str(string: &str) -> Result<MalTypes> {
     let tokens = tokenize(string);
     if tokens.len() == 0 {
-        return Err(anyhow!("no input"));
+        bail!("no input");
     }
 
     read_form(&mut Reader { tokens, pos: 0 })
@@ -75,6 +75,18 @@ fn read_list(reader: &mut Reader) -> Result<MalTypes> {
 }
 
 fn read_atom(reader: &mut Reader) -> Result<MalTypes> {
+    static NUM_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^-?[0-9]+$").unwrap());
     let token = reader.next()?;
-    Ok(MalTypes::Atom(token))
+    match &token[..] {
+        "nil" => Ok(MalTypes::Nil),
+        "true" => Ok(MalTypes::Bool(true)),
+        "false" => Ok(MalTypes::Bool(false)),
+        _ => {
+            if NUM_RE.is_match(&token) {
+                Ok(MalTypes::Num(token.parse().unwrap()))
+            } else {
+                Ok(MalTypes::Sym(token))
+            }
+        },
+    }
 }
