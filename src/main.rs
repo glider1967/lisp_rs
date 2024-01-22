@@ -1,18 +1,19 @@
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use anyhow::{anyhow, bail, Result};
 use rustyline::{error::ReadlineError, DefaultEditor};
-use types::{MalTypes, MalRet};
+use types::{MalRet, MalTypes};
 
+use crate::env::Env;
 use crate::printer::print;
 use crate::reader::read_str;
-use crate::env::Env;
+mod env;
 mod printer;
 mod reader;
 mod types;
-mod env;
 
-fn eval_ast(ast: &MalTypes, env: &Env) -> MalRet {
+fn eval_ast(ast: &MalTypes, env: &Rc<RefCell<Env>>) -> MalRet {
     match ast {
         MalTypes::List(list) => {
             let mut res = vec![];
@@ -21,18 +22,24 @@ fn eval_ast(ast: &MalTypes, env: &Env) -> MalRet {
             }
             Ok(MalTypes::List(Rc::new(res)))
         }
-        MalTypes::Sym(_) => Ok(env.get(ast)?),
+        MalTypes::Sym(_) => Ok(env.borrow_mut().get(ast)?),
         _ => Ok(ast.clone()),
     }
 }
 
-fn eval(ast: &MalTypes, env: &Env) -> MalRet {
+fn eval(ast: &MalTypes, env: &Rc<RefCell<Env>>) -> MalRet {
     match ast {
         MalTypes::List(list) => {
             if list.is_empty() {
-                Ok(ast.clone())
-            } else {
-                match eval_ast(ast, env)? {
+                return Ok(ast.clone());
+            }
+
+            let arg0 = &list[0];
+            match arg0 {
+                MalTypes::Sym(sym) if sym == "def!" => {
+                    env.borrow_mut().set(list[1].clone(), eval(&list[2], env)?)
+                }, 
+                _ => match eval_ast(ast, env)? {
                     MalTypes::List(list2) => {
                         let func = &list2[0];
                         let args = list2[1..].to_vec();
@@ -63,10 +70,10 @@ fn apply(func: &MalTypes, args: &Vec<MalTypes>) -> MalRet {
 fn main() -> Result<()> {
     let mut rl = DefaultEditor::new()?;
 
-    let mut global_env = Env::new(None);
-    global_env.set("+".to_owned(), MalTypes::Func(|x, y| x + y));
-    global_env.set("-".to_owned(), MalTypes::Func(|x, y| x - y));
-    global_env.set("*".to_owned(), MalTypes::Func(|x, y| x * y));
+    let global_env = Rc::new(RefCell::new(Env::new(None)));
+    global_env.borrow_mut().set(MalTypes::Sym("+".to_owned()), MalTypes::Func(|x, y| x + y))?;
+    global_env.borrow_mut().set(MalTypes::Sym("-".to_owned()), MalTypes::Func(|x, y| x - y))?;
+    global_env.borrow_mut().set(MalTypes::Sym("*".to_owned()), MalTypes::Func(|x, y| x * y))?;
 
     loop {
         let readline = rl.readline("> ");

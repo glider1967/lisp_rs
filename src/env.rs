@@ -1,9 +1,9 @@
 use std::{cell::RefCell, rc::Rc};
 
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use fnv::FnvHashMap;
 
-use crate::types::{MalTypes, MalRet};
+use crate::types::{MalRet, MalTypes};
 
 #[derive(Debug, Clone)]
 pub struct Env {
@@ -19,8 +19,14 @@ impl Env {
         }
     }
 
-    pub fn set(&mut self, key: String, val: MalTypes) {
-        self.data.borrow_mut().insert(key, val);
+    pub fn set(&mut self, key: MalTypes, val: MalTypes) -> MalRet {
+        match key {
+            MalTypes::Sym(sym) => {
+                self.data.borrow_mut().insert(sym, val.clone());
+                Ok(val)
+            },
+            _ => Err(anyhow!("invalid key type"))
+        }
     }
 
     fn find(&self, key: &String) -> Option<Self> {
@@ -39,13 +45,18 @@ impl Env {
             MalTypes::Sym(s) => {
                 let found_env = self.find(s);
                 if found_env.is_some() {
-                    Ok(found_env.unwrap().data.borrow().get(s)
-                    .context(format!("`{}` not found", s))?.clone())
+                    Ok(found_env
+                        .unwrap()
+                        .data
+                        .borrow()
+                        .get(s)
+                        .context(format!("`{}` not found", s))?
+                        .clone())
                 } else {
                     Err(anyhow!(format!("`{}` not found", s)))
                 }
-            },
-            _ => Err(anyhow!("invalid key type"))
+            }
+            _ => Err(anyhow!("invalid key type")),
         }
     }
 }
