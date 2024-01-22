@@ -2,40 +2,37 @@ use std::rc::Rc;
 
 use anyhow::{anyhow, bail, Result};
 use rustyline::{error::ReadlineError, DefaultEditor};
-use types::MalTypes;
+use types::{MalTypes, MalRet};
 
 use crate::printer::print;
 use crate::reader::read_str;
+use crate::env::Env;
 mod printer;
 mod reader;
 mod types;
+mod env;
 
-fn eval_ast(ast: &MalTypes) -> Result<MalTypes> {
+fn eval_ast(ast: &MalTypes, env: &Env) -> MalRet {
     match ast {
         MalTypes::List(list) => {
             let mut res = vec![];
             for val in list.iter() {
-                res.push(eval(val)?);
+                res.push(eval(val, env)?);
             }
             Ok(MalTypes::List(Rc::new(res)))
         }
-        MalTypes::Sym(s) => match &s[..] {
-            "+" => Ok(MalTypes::Func(|x, y| x + y)),
-            "-" => Ok(MalTypes::Func(|x, y| x - y)),
-            "*" => Ok(MalTypes::Func(|x, y| x * y)),
-            _ => Ok(ast.clone()),
-        },
+        MalTypes::Sym(_) => Ok(env.get(ast)?),
         _ => Ok(ast.clone()),
     }
 }
 
-fn eval(ast: &MalTypes) -> Result<MalTypes> {
+fn eval(ast: &MalTypes, env: &Env) -> MalRet {
     match ast {
         MalTypes::List(list) => {
             if list.is_empty() {
                 Ok(ast.clone())
             } else {
-                match eval_ast(ast)? {
+                match eval_ast(ast, env)? {
                     MalTypes::List(list2) => {
                         let func = &list2[0];
                         let args = list2[1..].to_vec();
@@ -45,11 +42,11 @@ fn eval(ast: &MalTypes) -> Result<MalTypes> {
                 }
             }
         }
-        _ => eval_ast(ast),
+        _ => eval_ast(ast, env),
     }
 }
 
-fn apply(func: &MalTypes, args: &Vec<MalTypes>) -> Result<MalTypes> {
+fn apply(func: &MalTypes, args: &Vec<MalTypes>) -> MalRet {
     if let MalTypes::Func(f) = func {
         if args.len() != 2 {
             bail!("invalid length of arguments");
@@ -66,6 +63,11 @@ fn apply(func: &MalTypes, args: &Vec<MalTypes>) -> Result<MalTypes> {
 fn main() -> Result<()> {
     let mut rl = DefaultEditor::new()?;
 
+    let mut global_env = Env::new(None);
+    global_env.set("+".to_owned(), MalTypes::Func(|x, y| x + y));
+    global_env.set("-".to_owned(), MalTypes::Func(|x, y| x - y));
+    global_env.set("*".to_owned(), MalTypes::Func(|x, y| x * y));
+
     loop {
         let readline = rl.readline("> ");
         match readline {
@@ -73,7 +75,7 @@ fn main() -> Result<()> {
                 println!("Line: {}", &line);
                 let ast = read_str(&line)?;
                 dbg!(print(&ast));
-                dbg!(print(&eval(&ast)?));
+                dbg!(print(&eval(&ast, &global_env)?));
             }
             Err(ReadlineError::Interrupted) => continue,
             Err(ReadlineError::Eof) => break,
