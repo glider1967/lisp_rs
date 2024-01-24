@@ -5,12 +5,13 @@ use env::{get_env, new_env, set_env};
 use rustyline::{error::ReadlineError, DefaultEditor};
 use types::{
     MalRet,
-    MalVal::{self, Bool, List, MalFunc, Nil, Num, RustFunc, Sym},
+    MalVal::{self, Bool, List, MalFunc, Nil, RustFunc, Sym},
 };
 
 use crate::env::Env;
 use crate::printer::print;
 use crate::reader::read_str;
+mod core;
 mod env;
 mod printer;
 mod reader;
@@ -95,7 +96,7 @@ fn eval(ast: &MalVal, env: &Env) -> MalRet {
                     List(list2) => {
                         let func = &list2[0];
                         let args = list2[1..].to_vec();
-                        apply(&func, args)
+                        apply(func, args)
                     }
                     _ => Err(anyhow!("expected a list")),
                 },
@@ -128,31 +129,17 @@ fn apply(func: &MalVal, args: Vec<MalVal>) -> MalRet {
     }
 }
 
-fn plus(args: Vec<MalVal>) -> MalRet {
-    if args.len() != 2 {
-        bail!("invalid length of arguments");
-    }
-    match (&args[0], &args[1]) {
-        (Num(x), Num(y)) => Ok(Num(*x + *y)),
-        _ => Err(anyhow!("invalid number binary args")),
-    }
-}
-fn eq(args: Vec<MalVal>) -> MalRet {
-    if args.len() != 2 {
-        bail!("invalid length of arguments");
-    }
-    match (&args[0], &args[1]) {
-        (Num(x), Num(y)) => Ok(Bool(*x == *y)),
-        _ => Err(anyhow!("invalid number binary args")),
-    }
-}
-
 fn main() -> Result<()> {
     let mut rl = DefaultEditor::new()?;
 
-    let global_env = new_env(None);
-    set_env(&global_env, Sym("+".to_owned()), RustFunc(plus))?;
-    set_env(&global_env, Sym("=".to_owned()), RustFunc(eq))?;
+    let global_env = {
+        let global_env = new_env(None);
+        let core_funcs = core::ns();
+        for (sym, func) in core_funcs {
+            set_env(&global_env, Sym(sym.to_owned()), RustFunc(func))?;
+        }
+        global_env
+    };
 
     loop {
         let readline = rl.readline("> ");
