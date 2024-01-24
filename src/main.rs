@@ -5,7 +5,7 @@ use env::{get_env, new_env, set_env};
 use rustyline::{error::ReadlineError, DefaultEditor};
 use types::{
     MalRet,
-    MalTypes::{self, List, Num, RustFunc, Sym},
+    MalVal::{self, List, Num, RustFunc, Sym, Nil, Bool},
 };
 
 use crate::env::Env;
@@ -16,7 +16,7 @@ mod printer;
 mod reader;
 mod types;
 
-fn eval_ast(ast: &MalTypes, env: &Env) -> MalRet {
+fn eval_ast(ast: &MalVal, env: &Env) -> MalRet {
     match ast {
         List(list) => {
             let mut res = vec![];
@@ -30,7 +30,7 @@ fn eval_ast(ast: &MalTypes, env: &Env) -> MalRet {
     }
 }
 
-fn eval(ast: &MalTypes, env: &Env) -> MalRet {
+fn eval(ast: &MalVal, env: &Env) -> MalRet {
     match ast {
         List(list) => {
             if list.is_empty() {
@@ -56,6 +56,32 @@ fn eval(ast: &MalTypes, env: &Env) -> MalRet {
 
                     eval(&body, &new_env)
                 }
+                Sym(sym) if sym == "do" => {
+                    let evals = eval_ast(&List(Rc::new(list[1..].to_vec())), env)?;
+                    match evals {
+                        List(inner) => Ok(inner.last().unwrap_or(&Nil).clone()),
+                        _ => Err(anyhow!("invalid do form")),
+                    }
+                }
+                Sym(sym) if sym == "if" => {
+                    let cond = eval(&list[1], env)?;
+                    match cond {
+                        Bool(false) | Nil => {
+                            if list.len() >= 4 {
+                                eval(&list[3].clone(), env)
+                            } else {
+                                Ok(Nil)
+                            }
+                        }
+                        _ => {
+                            if list.len() >= 3 {
+                                eval(&list[2], env)
+                            } else {
+                                Ok(Nil)
+                            }
+                        },
+                    }
+                }
                 _ => match eval_ast(ast, env)? {
                     List(list2) => {
                         let func = &list2[0];
@@ -70,7 +96,7 @@ fn eval(ast: &MalTypes, env: &Env) -> MalRet {
     }
 }
 
-fn apply(func: &MalTypes, args: Vec<MalTypes>) -> MalRet {
+fn apply(func: &MalVal, args: Vec<MalVal>) -> MalRet {
     if let RustFunc(f) = func {
         f(args)
     } else {
@@ -78,12 +104,21 @@ fn apply(func: &MalTypes, args: Vec<MalTypes>) -> MalRet {
     }
 }
 
-fn plus(args: Vec<MalTypes>) -> MalRet {
+fn plus(args: Vec<MalVal>) -> MalRet {
     if args.len() != 2 {
         bail!("invalid length of arguments");
     }
     match (&args[0], &args[1]) {
         (Num(x), Num(y)) => Ok(Num(*x + *y)),
+        _ => Err(anyhow!("invalid number binary args")),
+    }
+}
+fn eq(args: Vec<MalVal>) -> MalRet {
+    if args.len() != 2 {
+        bail!("invalid length of arguments");
+    }
+    match (&args[0], &args[1]) {
+        (Num(x), Num(y)) => Ok(Bool(*x == *y)),
         _ => Err(anyhow!("invalid number binary args")),
     }
 }
@@ -93,6 +128,7 @@ fn main() -> Result<()> {
 
     let global_env = new_env(None);
     set_env(&global_env, Sym("+".to_owned()), RustFunc(plus))?;
+    set_env(&global_env, Sym("=".to_owned()), RustFunc(eq))?;
 
     loop {
         let readline = rl.readline("> ");

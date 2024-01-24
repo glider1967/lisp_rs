@@ -3,13 +3,13 @@ use std::rc::Rc;
 use anyhow::Result;
 
 #[derive(Debug, Clone)]
-pub enum MalTypes {
+pub enum MalVal {
     Nil,
     Bool(bool),
     Num(i64),
     Sym(String),
-    RustFunc(fn(Vec<MalTypes>) -> MalRet),
-    List(Rc<Vec<MalTypes>>),
+    RustFunc(fn(Vec<MalVal>) -> MalRet),
+    List(Rc<Vec<MalVal>>),
 }
 
-pub type MalRet = Result<MalTypes>;
+pub type MalRet = Result<MalVal>;

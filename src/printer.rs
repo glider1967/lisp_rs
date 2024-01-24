@@ -1,18 +1,18 @@
-use crate::types::MalTypes;
+use crate::types::MalVal;
 
-pub fn print(mal: &MalTypes) -> String {
+pub fn print(mal: &MalVal) -> String {
     match mal {
-        MalTypes::Nil => "NIL".to_owned(),
-        MalTypes::Bool(b) => {
+        MalVal::Nil => "NIL".to_owned(),
+        MalVal::Bool(b) => {
             if *b {
                 "TRUE".to_owned()
             } else {
                 "FALSE".to_owned()
             }
         }
-        MalTypes::Num(n) => n.to_string(),
-        MalTypes::Sym(s) => s.clone(),
-        MalTypes::List(l) => {
+        MalVal::Num(n) => n.to_string(),
+        MalVal::Sym(s) => s.clone(),
+        MalVal::List(l) => {
             format!(
                 "({})",
                 l.iter()
@@ -21,6 +21,6 @@ pub fn print(mal: &MalTypes) -> String {
                     .join(" ")
             )
         }
-        MalTypes::RustFunc(_) => "<builtin func>".to_owned(),
+        MalVal::RustFunc(_) => "<builtin func>".to_owned(),
     }
 }

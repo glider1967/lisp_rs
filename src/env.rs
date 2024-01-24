@@ -3,11 +3,11 @@ use std::{cell::RefCell, rc::Rc};
 use anyhow::{anyhow, Context};
 use fnv::FnvHashMap;
 
-use crate::types::{MalRet, MalTypes};
+use crate::types::{MalRet, MalVal};
 
 #[derive(Debug, Clone)]
 pub struct EnvInternal {
-    data: RefCell<FnvHashMap<String, MalTypes>>,
+    data: RefCell<FnvHashMap<String, MalVal>>,
     outer: Option<Env>,
 }
 pub type Env = Rc<EnvInternal>;
@@ -18,9 +18,9 @@ pub fn new_env(outer: Option<Env>) -> Env {
     })
 }
 
-pub fn set_env(env: &Env, key: MalTypes, val: MalTypes) -> MalRet {
+pub fn set_env(env: &Env, key: MalVal, val: MalVal) -> MalRet {
     match key {
-        MalTypes::Sym(sym) => {
+        MalVal::Sym(sym) => {
             env.data.borrow_mut().insert(sym, val.clone());
             Ok(val)
         }
@@ -39,9 +39,9 @@ fn find_env(env: &Env, key: &String) -> Option<Env> {
     }
 }
 
-pub fn get_env(env: &Env, key: &MalTypes) -> MalRet {
+pub fn get_env(env: &Env, key: &MalVal) -> MalRet {
     match key {
-        MalTypes::Sym(s) => {
+        MalVal::Sym(s) => {
             let found_env = find_env(&env, s);
             if found_env.is_some() {
                 Ok(found_env

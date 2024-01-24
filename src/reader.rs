@@ -1,10 +1,10 @@
 use std::rc::Rc;
 
-use anyhow::{bail, Context, Ok, Result};
+use anyhow::{bail, Context, Result};
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::types::MalTypes;
+use crate::types::MalVal::{self, Nil, Bool, Num, Sym, List};
 
 #[derive(Debug, Clone)]
 struct Reader {
@@ -43,7 +43,7 @@ fn tokenize(string: &str) -> Vec<String> {
     res
 }
 
-pub fn read_str(string: &str) -> Result<MalTypes> {
+pub fn read_str(string: &str) -> Result<MalVal> {
     let tokens = tokenize(string);
     if tokens.len() == 0 {
         bail!("no input");
@@ -52,7 +52,7 @@ pub fn read_str(string: &str) -> Result<MalTypes> {
     read_form(&mut Reader { tokens, pos: 0 })
 }
 
-fn read_form(reader: &mut Reader) -> Result<MalTypes> {
+fn read_form(reader: &mut Reader) -> Result<MalVal> {
     let token = reader.peek()?;
     match &token[..] {
         "(" => read_list(reader),
@@ -60,8 +60,8 @@ fn read_form(reader: &mut Reader) -> Result<MalTypes> {
     }
 }
 
-fn read_list(reader: &mut Reader) -> Result<MalTypes> {
-    let mut list = Vec::<MalTypes>::new();
+fn read_list(reader: &mut Reader) -> Result<MalVal> {
+    let mut list = Vec::<MalVal>::new();
     reader.next()?;
     loop {
         let token = reader.peek().context("expected `)`, got EOF")?;
@@ -71,21 +71,21 @@ fn read_list(reader: &mut Reader) -> Result<MalTypes> {
         list.push(read_form(reader)?);
     }
     let _ = reader.next();
-    Ok(MalTypes::List(Rc::new(list)))
+    Ok(List(Rc::new(list)))
 }
 
-fn read_atom(reader: &mut Reader) -> Result<MalTypes> {
+fn read_atom(reader: &mut Reader) -> Result<MalVal> {
     static NUM_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^-?[0-9]+$").unwrap());
     let token = reader.next()?;
     match &token[..] {
-        "nil" => Ok(MalTypes::Nil),
-        "true" => Ok(MalTypes::Bool(true)),
-        "false" => Ok(MalTypes::Bool(false)),
+        "nil" => Ok(Nil),
+        "true" => Ok(Bool(true)),
+        "false" => Ok(Bool(false)),
         _ => {
             if NUM_RE.is_match(&token) {
-                Ok(MalTypes::Num(token.parse().unwrap()))
+                Ok(Num(token.parse().unwrap()))
             } else {
-                Ok(MalTypes::Sym(token))
+                Ok(Sym(token))
             }
         }
     }
