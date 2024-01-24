@@ -4,7 +4,7 @@ use anyhow::{bail, Context, Result};
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::types::MalVal::{self, Nil, Bool, Num, Sym, List};
+use crate::types::MalVal::{self, Bool, List, Nil, Num, Sym};
 
 #[derive(Debug, Clone)]
 struct Reader {

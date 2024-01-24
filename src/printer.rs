@@ -22,5 +22,6 @@ pub fn print(mal: &MalVal) -> String {
             )
         }
         MalVal::RustFunc(_) => "<builtin func>".to_owned(),
+        MalVal::MalFunc { .. } => "<func>".to_owned(),
     }
 }

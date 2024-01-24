@@ -5,7 +5,7 @@ use env::{get_env, new_env, set_env};
 use rustyline::{error::ReadlineError, DefaultEditor};
 use types::{
     MalRet,
-    MalVal::{self, List, Num, RustFunc, Sym, Nil, Bool},
+    MalVal::{self, Bool, List, MalFunc, Nil, Num, RustFunc, Sym},
 };
 
 use crate::env::Env;
@@ -79,8 +79,17 @@ fn eval(ast: &MalVal, env: &Env) -> MalRet {
                             } else {
                                 Ok(Nil)
                             }
-                        },
+                        }
                     }
+                }
+                Sym(sym) if sym == "fn*" => {
+                    let params = list[1].clone();
+                    let body = list[2].clone();
+                    Ok(MalFunc {
+                        body: Rc::new(body),
+                        params: Rc::new(params),
+                        env: env.clone(),
+                    })
                 }
                 _ => match eval_ast(ast, env)? {
                     List(list2) => {
@@ -97,10 +106,25 @@ fn eval(ast: &MalVal, env: &Env) -> MalRet {
 }
 
 fn apply(func: &MalVal, args: Vec<MalVal>) -> MalRet {
-    if let RustFunc(f) = func {
-        f(args)
-    } else {
-        Err(anyhow!("invalid function"))
+    match func {
+        RustFunc(f) => f(args),
+        MalFunc { body, params, env } => {
+            let func_env = {
+                let new_env = new_env(Some(env.clone()));
+                // &**params: &Rc<MalVal> -> &MalVal
+                match &**params {
+                    List(binds) => {
+                        for (i, bind) in binds.iter().enumerate() {
+                            set_env(&new_env, bind.clone(), args[i].clone())?;
+                        }
+                        Ok(new_env)
+                    }
+                    _ => Err(anyhow!("failed to bind")),
+                }
+            }?;
+            Ok(eval(body, &func_env)?)
+        }
+        _ => Err(anyhow!("failed to call non-function")),
     }
 }
 
