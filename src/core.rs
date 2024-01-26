@@ -1,92 +1,29 @@
-use anyhow::{anyhow, bail};
+use anyhow::{anyhow, bail, Ok};
 
-use crate::types::{
+use crate::{printer::print, types::{
     MalRet,
-    MalVal::{self, Bool, Num},
-};
+    MalVal::{self, Bool, Num, Nil},
+}};
 
-// binaries
-fn plus(args: Vec<MalVal>) -> MalRet {
-    if args.len() != 2 {
-        bail!("invalid length of arguments");
-    }
-    match (&args[0], &args[1]) {
-        (Num(x), Num(y)) => Ok(Num(*x + *y)),
-        _ => Err(anyhow!("invalid number binary args")),
-    }
-}
-fn minus(args: Vec<MalVal>) -> MalRet {
-    if args.len() != 2 {
-        bail!("invalid length of arguments");
-    }
-    match (&args[0], &args[1]) {
-        (Num(x), Num(y)) => Ok(Num(*x - *y)),
-        _ => Err(anyhow!("invalid number binary args")),
-    }
-}
-fn mult(args: Vec<MalVal>) -> MalRet {
-    if args.len() != 2 {
-        bail!("invalid length of arguments");
-    }
-    match (&args[0], &args[1]) {
-        (Num(x), Num(y)) => Ok(Num(*x * *y)),
-        _ => Err(anyhow!("invalid number binary args")),
-    }
-}
-fn div(args: Vec<MalVal>) -> MalRet {
-    if args.len() != 2 {
-        bail!("invalid length of arguments");
-    }
-    match (&args[0], &args[1]) {
-        (Num(x), Num(y)) => Ok(Num(*x / *y)),
-        _ => Err(anyhow!("invalid number binary args")),
-    }
+macro_rules! num_binary {
+    ($ret:ident, $fn:expr) => {
+        |a: Vec<MalVal>| {
+            if a.len() != 2 {
+                bail!("expecting (num, num) args");
+            }
+            match (a[0].clone(), a[1].clone()) {
+                (Num(a0), Num(a1)) => Ok($ret($fn(a0, a1))),
+                _ => Err(anyhow!("expecting (num, num) args")),
+            }
+        }
+    };
 }
 
-fn eq(args: Vec<MalVal>) -> MalRet {
-    if args.len() != 2 {
-        bail!("invalid length of arguments");
+fn prn(args: Vec<MalVal>) -> MalRet {
+    for arg in args {
+        println!("{}", print(&arg));
     }
-    match (&args[0], &args[1]) {
-        (Num(x), Num(y)) => Ok(Bool(*x == *y)),
-        _ => Err(anyhow!("invalid number binary args")),
-    }
-}
-fn lt(args: Vec<MalVal>) -> MalRet {
-    if args.len() != 2 {
-        bail!("invalid length of arguments");
-    }
-    match (&args[0], &args[1]) {
-        (Num(x), Num(y)) => Ok(Bool(*x < *y)),
-        _ => Err(anyhow!("invalid number binary args")),
-    }
-}
-fn le(args: Vec<MalVal>) -> MalRet {
-    if args.len() != 2 {
-        bail!("invalid length of arguments");
-    }
-    match (&args[0], &args[1]) {
-        (Num(x), Num(y)) => Ok(Bool(*x <= *y)),
-        _ => Err(anyhow!("invalid number binary args")),
-    }
-}
-fn gt(args: Vec<MalVal>) -> MalRet {
-    if args.len() != 2 {
-        bail!("invalid length of arguments");
-    }
-    match (&args[0], &args[1]) {
-        (Num(x), Num(y)) => Ok(Bool(*x > *y)),
-        _ => Err(anyhow!("invalid number binary args")),
-    }
-}
-fn ge(args: Vec<MalVal>) -> MalRet {
-    if args.len() != 2 {
-        bail!("invalid length of arguments");
-    }
-    match (&args[0], &args[1]) {
-        (Num(x), Num(y)) => Ok(Bool(*x >= *y)),
-        _ => Err(anyhow!("invalid number binary args")),
-    }
+    Ok(Nil)
 }
 
 //==================================================================
@@ -95,14 +32,15 @@ fn ge(args: Vec<MalVal>) -> MalRet {
 
 pub fn ns() -> Vec<(&'static str, fn(Vec<MalVal>) -> MalRet)> {
     vec![
-        ("+", plus),
-        ("-", minus),
-        ("*", mult),
-        ("/", div),
-        ("=", eq),
-        ("<", lt),
-        ("<=", le),
-        (">", gt),
-        (">=", ge),
+        ("+", num_binary!(Num, |x, y| x + y)),
+        ("-", num_binary!(Num, |x, y| x - y)),
+        ("*", num_binary!(Num, |x, y| x * y)),
+        ("/", num_binary!(Num, |x, y| x / y)),
+        ("=", num_binary!(Bool, |x, y| x == y)),
+        ("<", num_binary!(Bool, |x, y| x < y)),
+        ("<=", num_binary!(Bool, |x, y| x <= y)),
+        (">", num_binary!(Bool, |x, y| x > y)),
+        (">=", num_binary!(Bool, |x, y| x >= y)),
+        ("prn", prn),
     ]
 }
