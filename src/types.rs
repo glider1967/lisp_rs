@@ -20,3 +20,13 @@ pub enum MalVal {
 }
 
 pub type MalRet = Result<MalVal>;
+
+macro_rules! list {
+  ($seq:expr) => {{
+    List(Rc::new($seq))
+  }};
+  [$($args:expr),*] => {{
+    let v: Vec<MalVal> = vec![$($args),*];
+    List(Rc::new(v))
+  }}
+}

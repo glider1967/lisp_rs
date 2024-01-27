@@ -15,37 +15,40 @@ mod core;
 mod env;
 mod printer;
 mod reader;
+#[macro_use]
 mod types;
 
-fn quasiquote_expand(ast: &MalVal, env: &Env) -> MalRet {
-    match ast {
-        List(list) => {
-            let mut ret = vec![];
-            for v in list.iter() {
-                match v {
-                    List(l) => match &l[0] {
-                        Sym(sym) if sym == "unquote" => {
-                            ret.push(eval(quasiquote_expand(&l[1], env)?, env.clone())?);
-                        }
-                        Sym(sym) if sym == "splice-unquote" => {
-                            let evaluated = eval(quasiquote_expand(&l[1], env)?, env.clone())?;
-                            match evaluated {
-                                List(l2) => {
-                                    for v2 in l2.iter() {
-                                        ret.push(v2.clone());
-                                    }
-                                }
-                                _ => bail!("unable to splice non-list"),
-                            }
-                        }
-                        _ => ret.push(v.clone()),
-                    },
-                    _ => ret.push(v.clone()),
+fn qq_iter(elts: &Vec<MalVal>) -> MalVal {
+    let mut acc = list![];
+    for elt in elts.iter().rev() {
+        if let List(v) = elt {
+            if v.len() == 2 {
+                if let Sym(ref s) = v[0] {
+                    if s == "splice-unquote" {
+                        acc = list![Sym("concat".to_string()), v[1].clone(), acc];
+                        continue;
+                    }
                 }
             }
-            Ok(List(Rc::new(ret)))
         }
-        _ => Ok(ast.clone()),
+        acc = list![Sym("cons".to_string()), quasiquote(&elt), acc];
+    }
+    return acc;
+}
+
+fn quasiquote(ast: &MalVal) -> MalVal {
+    match ast {
+        List(v) => {
+            if v.len() == 2 {
+                if let Sym(ref s) = v[0] {
+                    if s == "unquote" {
+                        return v[1].clone();
+                    }
+                }
+            }
+            return qq_iter(&v);
+        },
+        _ => ast.clone(),
     }
 }
 
@@ -99,7 +102,10 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         continue 'tco;
                     }
                     Sym(sym) if sym == "quote" => Ok(list[1].clone()),
-                    Sym(sym) if sym == "quasiquote" => quasiquote_expand(&list[1], &env),
+                    Sym(sym) if sym == "quasiquote" => {
+                        ast = quasiquote(&list[1]);
+                        continue 'tco;
+                    },
                     Sym(sym) if sym == "do" => {
                         let evals = eval_ast(
                             &List(Rc::new(list[1..list.len() - 1].to_vec())),
