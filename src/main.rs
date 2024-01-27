@@ -46,7 +46,7 @@ fn quasiquote(ast: &MalVal) -> MalVal {
                     }
                 }
             }
-            return qq_iter(&v);
+            qq_iter(&v)
         },
         _ => ast.clone(),
     }
@@ -59,7 +59,7 @@ fn eval_ast(ast: &MalVal, env: &Env) -> MalRet {
             for val in list.iter() {
                 res.push(eval(val.clone(), env.clone())?);
             }
-            Ok(List(Rc::new(res)))
+            Ok(list!(res))
         }
         Sym(_) => Ok(get_env(&env, ast)?),
         _ => Ok(ast.clone()),
@@ -102,6 +102,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         continue 'tco;
                     }
                     Sym(sym) if sym == "quote" => Ok(list[1].clone()),
+                    Sym(sym) if sym == "quasiquoteexpand" => Ok(quasiquote(&list[1])),
                     Sym(sym) if sym == "quasiquote" => {
                         ast = quasiquote(&list[1]);
                         continue 'tco;
