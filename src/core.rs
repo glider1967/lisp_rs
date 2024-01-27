@@ -10,15 +10,15 @@ use crate::{
     },
 };
 
-macro_rules! num_binary {
-    ($ret:ident, $fn:expr) => {
+macro_rules! binary {
+    ($type: ident, $ret:ident, $fn:expr) => {
         |a: Vec<MalVal>| {
             if a.len() != 2 {
-                bail!("expecting (num, num) args");
+                bail!("expecting two args");
             }
             match (a[0].clone(), a[1].clone()) {
-                (Num(a0), Num(a1)) => Ok($ret($fn(a0, a1))),
-                _ => Err(anyhow!("expecting (num, num) args")),
+                ($type(a0), $type(a1)) => Ok($ret($fn(a0, a1))),
+                _ => Err(anyhow!("invalid type of args")),
             }
         }
     };
@@ -61,15 +61,17 @@ fn concat(args: Vec<MalVal>) -> MalRet {
 
 pub fn ns() -> Vec<(&'static str, fn(Vec<MalVal>) -> MalRet)> {
     vec![
-        ("+", num_binary!(Num, |x, y| x + y)),
-        ("-", num_binary!(Num, |x, y| x - y)),
-        ("*", num_binary!(Num, |x, y| x * y)),
-        ("/", num_binary!(Num, |x, y| x / y)),
-        ("=", num_binary!(Bool, |x, y| x == y)),
-        ("<", num_binary!(Bool, |x, y| x < y)),
-        ("<=", num_binary!(Bool, |x, y| x <= y)),
-        (">", num_binary!(Bool, |x, y| x > y)),
-        (">=", num_binary!(Bool, |x, y| x >= y)),
+        ("+", binary!(Num, Num, |x, y| x + y)),
+        ("-", binary!(Num, Num, |x, y| x - y)),
+        ("*", binary!(Num, Num, |x, y| x * y)),
+        ("/", binary!(Num, Num, |x, y| x / y)),
+        ("=", binary!(Num, Bool, |x, y| x == y)),
+        ("<", binary!(Num, Bool, |x, y| x < y)),
+        ("<=", binary!(Num, Bool, |x, y| x <= y)),
+        (">", binary!(Num, Bool, |x, y| x > y)),
+        (">=", binary!(Num, Bool, |x, y| x >= y)),
+        ("and", binary!(Bool, Bool, |x, y| x && y)),
+        ("or", binary!(Bool, Bool, |x, y| x || y)),
         ("prn", prn),
         ("cons", cons),
         ("concat", concat),
