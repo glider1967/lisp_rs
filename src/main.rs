@@ -17,6 +17,38 @@ mod printer;
 mod reader;
 mod types;
 
+fn quasiquote_expand(ast: &MalVal, env: &Env) -> MalRet {
+    match ast {
+        List(list) => {
+            let mut ret = vec![];
+            for v in list.iter() {
+                match v {
+                    List(l) => match &l[0] {
+                        Sym(sym) if sym == "unquote" => {
+                            ret.push(eval(quasiquote_expand(&l[1], env)?, env.clone())?);
+                        }
+                        Sym(sym) if sym == "splice-unquote" => {
+                            let evaluated = eval(quasiquote_expand(&l[1], env)?, env.clone())?;
+                            match evaluated {
+                                List(l2) => {
+                                    for v2 in l2.iter() {
+                                        ret.push(v2.clone());
+                                    }
+                                }
+                                _ => bail!("unable to splice non-list"),
+                            }
+                        }
+                        _ => ret.push(v.clone()),
+                    },
+                    _ => ret.push(v.clone()),
+                }
+            }
+            Ok(List(Rc::new(ret)))
+        }
+        _ => Ok(ast.clone()),
+    }
+}
+
 fn eval_ast(ast: &MalVal, env: &Env) -> MalRet {
     match ast {
         List(list) => {
@@ -57,11 +89,8 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                             List(binds) => {
                                 let bind = &binds[0];
                                 let expr = &binds[1];
-                                let _ = set_env(
-                                    &env,
-                                    bind.clone(),
-                                    eval(expr.clone(), env.clone())?,
-                                );
+                                let _ =
+                                    set_env(&env, bind.clone(), eval(expr.clone(), env.clone())?);
                             }
                             _ => bail!("invalid arglist in let*"),
                         }
@@ -69,9 +98,8 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         ast = body;
                         continue 'tco;
                     }
-                    Sym(sym) if sym == "quote" => {
-                        Ok(list[1].clone())
-                    }
+                    Sym(sym) if sym == "quote" => Ok(list[1].clone()),
+                    Sym(sym) if sym == "quasiquote" => quasiquote_expand(&list[1], &env),
                     Sym(sym) if sym == "do" => {
                         let evals = eval_ast(
                             &List(Rc::new(list[1..list.len() - 1].to_vec())),
@@ -119,17 +147,25 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         List(list2) => {
                             let func = &list2[0];
                             let args = list2[1..].to_vec();
-                            
+
                             match func {
                                 RustFunc(f) => f(args),
-                                MalFunc {body, params, env: ienv} => {
+                                MalFunc {
+                                    body,
+                                    params,
+                                    env: ienv,
+                                } => {
                                     env = {
                                         let new_env = new_env(Some(ienv.clone()));
                                         // &**params: &Rc<MalVal> -> &MalVal
                                         match &**params {
                                             List(binds) => {
                                                 for (i, bind) in binds.iter().enumerate() {
-                                                    set_env(&new_env, bind.clone(), args[i].clone())?;
+                                                    set_env(
+                                                        &new_env,
+                                                        bind.clone(),
+                                                        args[i].clone(),
+                                                    )?;
                                                 }
                                                 Ok(new_env)
                                             }
@@ -138,7 +174,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                     }?;
                                     ast = (&**body).clone();
                                     continue 'tco;
-                                },
+                                }
                                 _ => Err(anyhow!("apttempt to call non-function")),
                             }
                         }
@@ -157,6 +193,9 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
 
 fn main() -> Result<()> {
     let mut rl = DefaultEditor::new()?;
+    if rl.load_history(".mal-history").is_err() {
+        eprintln!("No previous history.");
+    }
 
     let global_env = {
         let global_env = new_env(None);
@@ -171,13 +210,13 @@ fn main() -> Result<()> {
         let readline = rl.readline("> ");
         match readline {
             Ok(line) => {
+                rl.add_history_entry(&line)?;
+                rl.save_history(".mal-history").unwrap();
                 match read_str(&line) {
-                    Ok(ast) => {
-                        match eval(ast, global_env.clone()) {
-                            Ok(evaluated) => println!("{}", print(&evaluated)),
-                            Err(err) => println!("Error: {:?}", err),
-                        }
-                    }
+                    Ok(ast) => match eval(ast, global_env.clone()) {
+                        Ok(evaluated) => println!("{}", print(&evaluated)),
+                        Err(err) => println!("Error: {:?}", err),
+                    },
                     Err(err) => println!("Parse Error: {:?}", err),
                 }
             }
