@@ -1,10 +1,12 @@
+use std::rc::Rc;
+
 use anyhow::{anyhow, bail, Ok};
 
 use crate::{
     printer::print,
     types::{
         MalRet,
-        MalVal::{self, Bool, Nil, Num},
+        MalVal::{self, Bool, Nil, Num, List},
     },
 };
 
@@ -29,6 +31,30 @@ fn prn(args: Vec<MalVal>) -> MalRet {
     Ok(Nil)
 }
 
+fn cons(args: Vec<MalVal>) -> MalRet {
+    let car = args[0].clone();
+    let cdr = args[1].clone();
+    match cdr {
+        List(v)=> {
+            let mut new_v = vec![car];
+            new_v.extend_from_slice(&v);
+            Ok(List(Rc::new(new_v.to_vec())))
+        }
+        _ => Err(anyhow!("non-seq passed to concat")),
+    }
+}
+
+fn concat(args: Vec<MalVal>) -> MalRet {
+    let mut new_v = vec![];
+    for seq in args.iter() {
+        match seq {
+            List(v)=> new_v.extend_from_slice(v),
+            _ => bail!("non-seq passed to concat"),
+        }
+    }
+    Ok(List(Rc::new(new_v.to_vec())))
+}
+
 //==================================================================
 
 //==================================================================
@@ -45,5 +71,7 @@ pub fn ns() -> Vec<(&'static str, fn(Vec<MalVal>) -> MalRet)> {
         (">", num_binary!(Bool, |x, y| x > y)),
         (">=", num_binary!(Bool, |x, y| x >= y)),
         ("prn", prn),
+        ("cons", cons),
+        ("concat", concat),
     ]
 }

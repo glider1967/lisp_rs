@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use once_cell::sync::Lazy;
 use regex::Regex;
 
@@ -55,7 +55,24 @@ pub fn read_str(string: &str) -> Result<MalVal> {
 fn read_form(reader: &mut Reader) -> Result<MalVal> {
     let token = reader.peek()?;
     match &token[..] {
+        "'" => {
+            let _ = reader.next();
+            Ok(List(Rc::new(vec![Sym("quote".to_owned()), read_form(reader)?])))
+        }
+        "`" => {
+            let _ = reader.next();
+            Ok(List(Rc::new(vec![Sym("quasiquote".to_owned()), read_form(reader)?])))
+        }
+        "~" => {
+            let _ = reader.next();
+            Ok(List(Rc::new(vec![Sym("unquote".to_owned()), read_form(reader)?])))
+        }
+        "~@" => {
+            let _ = reader.next();
+            Ok(List(Rc::new(vec![Sym("splice-unquote".to_owned()), read_form(reader)?])))
+        }
         "(" => read_list(reader),
+        ")" => Err(anyhow!("unexpected ')'")),
         _ => read_atom(reader),
     }
 }
