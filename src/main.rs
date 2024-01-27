@@ -88,14 +88,28 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let arglist = list[1].clone();
                         let body = list[2].clone();
 
-                        match arglist {
-                            List(binds) => {
-                                let bind = &binds[0];
-                                let expr = &binds[1];
-                                let _ =
-                                    set_env(&env, bind.clone(), eval(expr.clone(), env.clone())?);
+                        if let List(arglist) = arglist {
+                            for binds_ast in arglist.iter() {
+                                match binds_ast {
+                                    List(binds) => {
+                                        let bind = &binds[0];
+                                        let expr = &binds[1];
+                                        match bind {
+                                            Sym(_) => {
+                                                let _ = set_env(
+                                                    &env,
+                                                    bind.clone(),
+                                                    eval(expr.clone(), env.clone())?,
+                                                );
+                                            },
+                                            _ => bail!("non-sym arg in let*")
+                                        }
+                                    }
+                                    _ => bail!("invalid arglist in let*"),
+                                }
                             }
-                            _ => bail!("invalid arglist in let*"),
+                        } else {
+                            bail!("invalid arglist in let*");
                         }
 
                         ast = body;
