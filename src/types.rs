@@ -14,6 +14,7 @@ pub enum MalVal {
     MalFunc {
         body: Rc<MalVal>,
         params: Rc<MalVal>,
+        is_macro: bool,
         env: Env,
     },
     List(Rc<Vec<MalVal>>),

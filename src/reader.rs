@@ -57,19 +57,31 @@ fn read_form(reader: &mut Reader) -> Result<MalVal> {
     match &token[..] {
         "'" => {
             let _ = reader.next();
-            Ok(List(Rc::new(vec![Sym("quote".to_owned()), read_form(reader)?])))
+            Ok(List(Rc::new(vec![
+                Sym("quote".to_owned()),
+                read_form(reader)?,
+            ])))
         }
         "`" => {
             let _ = reader.next();
-            Ok(List(Rc::new(vec![Sym("quasiquote".to_owned()), read_form(reader)?])))
+            Ok(List(Rc::new(vec![
+                Sym("quasiquote".to_owned()),
+                read_form(reader)?,
+            ])))
         }
         "~" => {
             let _ = reader.next();
-            Ok(List(Rc::new(vec![Sym("unquote".to_owned()), read_form(reader)?])))
+            Ok(List(Rc::new(vec![
+                Sym("unquote".to_owned()),
+                read_form(reader)?,
+            ])))
         }
         "~@" => {
             let _ = reader.next();
-            Ok(List(Rc::new(vec![Sym("splice-unquote".to_owned()), read_form(reader)?])))
+            Ok(List(Rc::new(vec![
+                Sym("splice-unquote".to_owned()),
+                read_form(reader)?,
+            ])))
         }
         "(" => read_list(reader),
         ")" => Err(anyhow!("unexpected ')'")),

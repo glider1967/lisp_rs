@@ -6,7 +6,7 @@ use crate::{
     printer::print,
     types::{
         MalRet,
-        MalVal::{self, Bool, Nil, Num, List},
+        MalVal::{self, Bool, List, Nil, Num},
     },
 };
 
@@ -35,7 +35,7 @@ fn cons(args: Vec<MalVal>) -> MalRet {
     let car = args[0].clone();
     let cdr = args[1].clone();
     match cdr {
-        List(v)=> {
+        List(v) => {
             let mut new_v = vec![car];
             new_v.extend_from_slice(&v);
             Ok(List(Rc::new(new_v.to_vec())))
@@ -48,7 +48,7 @@ fn concat(args: Vec<MalVal>) -> MalRet {
     let mut new_v = vec![];
     for seq in args.iter() {
         match seq {
-            List(v)=> new_v.extend_from_slice(v),
+            List(v) => new_v.extend_from_slice(v),
             _ => bail!("non-seq passed to concat"),
         }
     }

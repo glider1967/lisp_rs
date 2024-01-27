@@ -47,7 +47,7 @@ fn quasiquote(ast: &MalVal) -> MalVal {
                 }
             }
             qq_iter(&v)
-        },
+        }
         _ => ast.clone(),
     }
 }
@@ -106,7 +106,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     Sym(sym) if sym == "quasiquote" => {
                         ast = quasiquote(&list[1]);
                         continue 'tco;
-                    },
+                    }
                     Sym(sym) if sym == "do" => {
                         let evals = eval_ast(
                             &List(Rc::new(list[1..list.len() - 1].to_vec())),
@@ -147,8 +147,29 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         Ok(MalFunc {
                             body: Rc::new(body),
                             params: Rc::new(params),
+                            is_macro: false,
                             env: env.clone(),
                         })
+                    }
+                    Sym(sym) if sym == "defmacro!" => {
+                        let a1 = list[1].clone();
+                        let a2 = list[2].clone();
+                        let r = eval(a2, env.clone())?;
+                        match r {
+                            MalFunc {
+                                body, params, env, ..
+                            } => Ok(set_env(
+                                &env,
+                                a1.clone(),
+                                MalFunc {
+                                    body: body.clone(),
+                                    params: params.clone(),
+                                    is_macro: true,
+                                    env: env.clone(),
+                                },
+                            )?),
+                            _ => Err(anyhow!("set macro on non-func")),
+                        }
                     }
                     _ => match eval_ast(&ast, &env)? {
                         List(list2) => {
@@ -161,6 +182,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                     body,
                                     params,
                                     env: ienv,
+                                    ..
                                 } => {
                                     env = {
                                         let new_env = new_env(Some(ienv.clone()));
