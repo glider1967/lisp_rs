@@ -1,9 +1,12 @@
 use anyhow::{anyhow, bail, Ok};
 
-use crate::{printer::print, types::{
-    MalRet,
-    MalVal::{self, Bool, Num, Nil},
-}};
+use crate::{
+    printer::print,
+    types::{
+        MalRet,
+        MalVal::{self, Bool, Nil, Num},
+    },
+};
 
 macro_rules! num_binary {
     ($ret:ident, $fn:expr) => {
