@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use anyhow::{anyhow, bail, Result};
-use env::{get_env, new_env, set_env};
+use env::{bind_env, find_env, get_env, new_env, set_env};
 use rustyline::{error::ReadlineError, DefaultEditor};
 use types::{
     MalRet,
@@ -52,6 +52,46 @@ fn quasiquote(ast: &MalVal) -> MalVal {
     }
 }
 
+fn is_macro_call(ast: &MalVal, env: &Env) -> Option<(MalVal, Vec<MalVal>)> {
+    match ast {
+        List(v) => match v[0] {
+            Sym(ref s) => match find_env(env, s) {
+                Some(e) => match get_env(&e, &v[0]) {
+                    Ok(f @ MalFunc { is_macro: true, .. }) => Some((f, v[1..].to_vec())),
+                    _ => None,
+                },
+                _ => None,
+            },
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+fn macroexpand(mut ast: MalVal, env: &Env) -> Result<(bool, MalVal)> {
+    let mut was_expanded = false;
+    while let Some((mf, args)) = is_macro_call(&ast, env) {
+        ast = {
+            match &mf {
+                MalFunc {
+                    body,
+                    params,
+                    env: ienv,
+                    ..
+                } => {
+                    let a = &**body;
+                    let p = &**params;
+                    let fn_env = bind_env(&ienv, p, &args)?;
+                    Ok(eval(a.clone(), fn_env)?)
+                }
+                _ => Err(anyhow!("unreachable: macroexpand")),
+            }
+        }?;
+        was_expanded = true;
+    }
+    Ok((was_expanded, ast))
+}
+
 fn eval_ast(ast: &MalVal, env: &Env) -> MalRet {
     match ast {
         List(list) => {
@@ -78,6 +118,14 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                     return Ok(ast);
                 }
 
+                match macroexpand(ast.clone(), &env) {
+                    Ok((true, new_ast)) => {
+                        ast = new_ast;
+                        continue 'tco;
+                    }
+                    _ => (),
+                }
+
                 let arg0 = &list[0];
                 match arg0 {
                     Sym(sym) if sym == "def!" => {
@@ -101,8 +149,8 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                                     bind.clone(),
                                                     eval(expr.clone(), env.clone())?,
                                                 );
-                                            },
-                                            _ => bail!("non-sym arg in let*")
+                                            }
+                                            _ => bail!("non-sym arg in let*"),
                                         }
                                     }
                                     _ => bail!("invalid arglist in let*"),
@@ -171,20 +219,27 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                         let r = eval(a2, env.clone())?;
                         match r {
                             MalFunc {
-                                body, params, env, ..
+                                body,
+                                params,
+                                env: ienv,
+                                ..
                             } => Ok(set_env(
-                                &env,
+                                &ienv,
                                 a1.clone(),
                                 MalFunc {
                                     body: body.clone(),
                                     params: params.clone(),
                                     is_macro: true,
-                                    env: env.clone(),
+                                    env: ienv.clone(),
                                 },
                             )?),
                             _ => Err(anyhow!("set macro on non-func")),
                         }
                     }
+                    Sym(sym) if sym == "macroexpand" => match macroexpand(list[1].clone(), &env) {
+                        Ok((_, new_ast)) => Ok(new_ast),
+                        Err(e) => Err(e),
+                    },
                     _ => match eval_ast(&ast, &env)? {
                         List(list2) => {
                             let func = &list2[0];
@@ -198,23 +253,7 @@ fn eval(mut ast: MalVal, mut env: Env) -> MalRet {
                                     env: ienv,
                                     ..
                                 } => {
-                                    env = {
-                                        let new_env = new_env(Some(ienv.clone()));
-                                        // &**params: &Rc<MalVal> -> &MalVal
-                                        match &**params {
-                                            List(binds) => {
-                                                for (i, bind) in binds.iter().enumerate() {
-                                                    set_env(
-                                                        &new_env,
-                                                        bind.clone(),
-                                                        args[i].clone(),
-                                                    )?;
-                                                }
-                                                Ok(new_env)
-                                            }
-                                            _ => Err(anyhow!("failed to bind")),
-                                        }
-                                    }?;
+                                    env = bind_env(&ienv, &**params, &args)?;
                                     ast = (&**body).clone();
                                     continue 'tco;
                                 }

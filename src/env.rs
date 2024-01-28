@@ -1,9 +1,12 @@
 use std::{cell::RefCell, rc::Rc};
 
-use anyhow::{anyhow, Context};
+use anyhow::{anyhow, Context, Result};
 use fnv::FnvHashMap;
 
-use crate::types::{MalRet, MalVal};
+use crate::types::{
+    MalRet,
+    MalVal::{self, List, Sym},
+};
 
 #[derive(Debug, Clone)]
 pub struct EnvInternal {
@@ -20,7 +23,7 @@ pub fn new_env(outer: Option<Env>) -> Env {
 
 pub fn set_env(env: &Env, key: MalVal, val: MalVal) -> MalRet {
     match key {
-        MalVal::Sym(sym) => {
+        Sym(sym) => {
             env.data.borrow_mut().insert(sym, val.clone());
             Ok(val)
         }
@@ -28,7 +31,7 @@ pub fn set_env(env: &Env, key: MalVal, val: MalVal) -> MalRet {
     }
 }
 
-fn find_env(env: &Env, key: &String) -> Option<Env> {
+pub fn find_env(env: &Env, key: &String) -> Option<Env> {
     if env.data.borrow().contains_key(key) {
         Some(env.clone())
     } else {
@@ -41,7 +44,7 @@ fn find_env(env: &Env, key: &String) -> Option<Env> {
 
 pub fn get_env(env: &Env, key: &MalVal) -> MalRet {
     match key {
-        MalVal::Sym(s) => {
+        Sym(s) => {
             let found_env = find_env(&env, s);
             if found_env.is_some() {
                 Ok(found_env
@@ -56,5 +59,30 @@ pub fn get_env(env: &Env, key: &MalVal) -> MalRet {
             }
         }
         _ => Err(anyhow!("invalid key type")),
+    }
+}
+
+pub fn bind_env(env: &Env, mbinds: &MalVal, exprs: &Vec<MalVal>) -> Result<Env> {
+    let new_env = new_env(Some(env.clone()));
+    match mbinds {
+        List(binds) => {
+            for (i, bind) in binds.iter().enumerate() {
+                match bind {
+                    Sym(sym) if sym == "&" => {
+                        set_env(
+                            &new_env,
+                            binds[i + 1].clone(),
+                            List(Rc::new(exprs[i..].to_vec())),
+                        )?;
+                        break;
+                    }
+                    _ => {
+                        set_env(&new_env, bind.clone(), exprs[i].clone())?;
+                    }
+                }
+            }
+            Ok(new_env)
+        }
+        _ => Err(anyhow!("failed to bind")),
     }
 }

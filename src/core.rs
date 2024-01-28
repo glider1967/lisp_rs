@@ -55,6 +55,16 @@ fn concat(args: Vec<MalVal>) -> MalRet {
     Ok(List(Rc::new(new_v.to_vec())))
 }
 
+fn count(args: Vec<MalVal>) -> MalRet {
+    let li = &args[0];
+    match li {
+        List(l) => {
+            Ok(Num(l.len() as i64))
+        }
+        _ => Err(anyhow!("non-seq passed to count"))
+    }
+}
+
 //==================================================================
 
 //==================================================================
@@ -75,5 +85,6 @@ pub fn ns() -> Vec<(&'static str, fn(Vec<MalVal>) -> MalRet)> {
         ("prn", prn),
         ("cons", cons),
         ("concat", concat),
+        ("count", count),
     ]
 }
